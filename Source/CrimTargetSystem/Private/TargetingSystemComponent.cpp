@@ -1,4 +1,4 @@
-﻿// Copyright Soccertitan
+﻿// Copyright Soccertitan 2025
 
 
 #include "TargetingSystemComponent.h"
@@ -140,7 +140,7 @@ UTargetPointComponent* UTargetingSystemComponent::FindNearestTarget(const TArray
 	return NearestTarget;
 }
 
-UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(const TArray<UTargetPointFilterBase*>& Filters, bool bReverseDirection) const
+UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft) const
 {
 	TArray<UTargetPointComponent*> TargetablePoints = GetTargetablePoints(Filters);
 	UTargetPointComponent* NewTarget = TargetedPoint.Get();
@@ -157,7 +157,7 @@ UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(const TArray<UT
 		UTargetPointComponent* RightTarget = nullptr;
 		UTargetPointComponent* LeftTarget = nullptr;
 
-		if(bReverseDirection)
+		if(bSearchLeft)
 		{
 			// Cycle to the left
 			RightComparison = 0.f;
@@ -187,7 +187,7 @@ UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(const TArray<UT
 					FMath::Sign(FVector2D::CrossProduct(ReferenceVector, ComparisonActorVector));
 
 			//Get the target closest to the right and furthest from the left of the original target if we choose targets to the right
-			if (!bReverseDirection)
+			if (!bSearchLeft)
 			{
 				if (ZRotation > 0 && ZRotation < RightComparison)
 				{
@@ -218,7 +218,7 @@ UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(const TArray<UT
 		if (RightTarget || LeftTarget)
 		{
 			// Selects target to the right
-			if (!bReverseDirection)
+			if (!bSearchLeft)
 			{
 				if (RightTarget)
 				{
@@ -352,13 +352,13 @@ TArray<UTargetPointComponent*> UTargetingSystemComponent::GetTargetablePoints(co
 
 	TArray<FOverlapResult> Overlaps;
 	GetWorld()->OverlapMultiByObjectType(
-		Overlaps,
-		OwnerPawn->GetActorLocation(),
-		FQuat::Identity,
-		ObjectParams,
-		FCollisionShape::MakeSphere(MaxTargetingRange),
-		Params
-	);
+	   Overlaps,
+	   OwnerPawn->GetActorLocation(),
+	   FQuat::Identity,
+	   ObjectParams,
+	   FCollisionShape::MakeSphere(MaxTargetingRange),
+	   Params
+   );
 
 	for (FOverlapResult& Overlap : Overlaps)
 	{

@@ -1,4 +1,4 @@
-﻿// Copyright Soccertitan
+﻿// Copyright Soccertitan 2025
 
 #pragma once
 
@@ -43,10 +43,10 @@ public:
 	/** Searches for the next targetable point right of the current target point. If there is no current target,
 	 * will call FindNearestTarget.
 	 * @param Filters TargetPoints to filter out.
-	 * @param bReverseDirection If true, will search left of target. False, right of target.
+	 * @param bSearchLeft If true, will search left of target. False, right of target.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Targeting System")
-	UTargetPointComponent* FindNextTarget(const TArray<UTargetPointFilterBase*>& Filters, bool bReverseDirection = false) const;
+	UTargetPointComponent* FindNextTarget(const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft = false) const;
 	
 	/** Clears the currently selected target and unlocks the camera. */
 	UFUNCTION(BlueprintCallable, Category = "Targeting System")
