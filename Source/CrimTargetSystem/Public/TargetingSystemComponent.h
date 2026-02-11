@@ -42,11 +42,12 @@ public:
 	
 	/** Searches for the next targetable point right of the current target point. If there is no current target,
 	 * will call FindNearestTarget.
+	 * @param OriginPoint The point to search from.
 	 * @param Filters TargetPoints to filter out.
 	 * @param bSearchLeft If true, will search left of target. False, right of target.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Targeting System", meta = (AutoCreateRefTerm="Filters"))
-	UTargetPointComponent* FindNextTarget(const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft = false) const;
+	UTargetPointComponent* FindNextTarget(UTargetPointComponent* OriginPoint, const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft = false) const;
 	
 	/**
 	 * Updates the TargetPoint with the passed in value. If Pawn doesn't have authority calls the server version.

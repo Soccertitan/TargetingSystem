@@ -119,11 +119,7 @@ void UTargetingSystemComponent::SetTarget(UTargetPointComponent* NewTargetPoint)
 
 UTargetPointComponent* UTargetingSystemComponent::FindNearestTarget(const TArray<UTargetPointFilterBase*>& Filters) const
 {
-	TArray<UTargetPointComponent*> TargetablePoints;
-	if (Filters.Num() > 0)
-	{
-		TargetablePoints = GetTargetablePoints(Filters);
-	}
+	TArray<UTargetPointComponent*> TargetablePoints = GetTargetablePoints(Filters);
 
 	if (TargetablePoints.IsEmpty())
 	{
@@ -149,10 +145,10 @@ UTargetPointComponent* UTargetingSystemComponent::FindNearestTarget(const TArray
 	return NearestTarget;
 }
 
-UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft) const
+UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(UTargetPointComponent* OriginPoint, const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft) const
 {
 	TArray<UTargetPointComponent*> TargetablePoints = GetTargetablePoints(Filters);
-	UTargetPointComponent* NewTarget = TargetedPoint;
+	UTargetPointComponent* NewTarget = OriginPoint;
 
 	if (IsValid(NewTarget))
 	{
