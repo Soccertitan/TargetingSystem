@@ -105,6 +105,7 @@ void UTargetingSystemComponent::SetTarget(UTargetPointComponent* NewTargetPoint)
 	
 	TargetedPoint = NewTargetPoint;
 	OnTargetedPointSet();
+	OnTargetedPointUpdatedDelegate.Broadcast(TargetedPoint);
 
 	if (!HasAuthority())
 	{
@@ -267,6 +268,7 @@ void UTargetingSystemComponent::ClearTarget()
 	
 	TargetedPoint = nullptr;
 	OnClearTarget();
+	OnTargetedPointUpdatedDelegate.Broadcast(TargetedPoint);
 
 	if (!HasAuthority())
 	{
@@ -304,6 +306,8 @@ void UTargetingSystemComponent::SetCameraLock(bool bLock)
 
 	bCameraLocked = bLock;
 	OnCameraLockSet();
+	OnCameraLockSetDelegate.Broadcast(bCameraLocked);
+
 	if (!HasAuthority())
 	{
 		Server_SetCameraLock(bCameraLocked);
@@ -370,8 +374,6 @@ float UTargetingSystemComponent::GetDistanceToPoint(const UTargetPointComponent*
 
 void UTargetingSystemComponent::OnTargetedPointSet()
 {
-	OnTargetedPointUpdatedDelegate.Broadcast(TargetedPoint);
-
 	CreateAndAttachTargetSelectedWidgetComponent(TargetedPoint);
 	TargetedPoint->GetOwner()->OnDestroyed.AddUniqueDynamic(this, &UTargetingSystemComponent::OnTargetPointOwnerDestroyed);
 	
@@ -386,8 +388,6 @@ void UTargetingSystemComponent::OnTargetedPointSet()
 
 void UTargetingSystemComponent::OnClearTarget()
 {
-	OnTargetedPointUpdatedDelegate.Broadcast(nullptr);
-
 	if (IsValid(TargetWidgetComponent))
 	{
 		TargetWidgetComponent->DestroyComponent();
@@ -397,8 +397,6 @@ void UTargetingSystemComponent::OnClearTarget()
 
 void UTargetingSystemComponent::OnCameraLockSet()
 {
-	OnCameraLockSetDelegate.Broadcast(bCameraLocked);
-	
 	// Recast PlayerController in case it wasn't already setup on Begin Play (local split screen)
 	SetupLocalPlayerController();
 
@@ -613,11 +611,13 @@ void UTargetingSystemComponent::OnRep_TargetedPoint()
 	{
 		OnClearTarget();
 	}
+	OnTargetedPointUpdatedDelegate.Broadcast(TargetedPoint);
 }
 
 void UTargetingSystemComponent::OnRep_CameraLocked()
 {
 	OnCameraLockSet();
+	OnCameraLockSetDelegate.Broadcast(bCameraLocked);
 }
 
 void UTargetingSystemComponent::OnTargetPointOwnerDestroyed(AActor* DestroyedActor)
