@@ -16,6 +16,6 @@ class TARGETINGSYSTEM_API UTargetingSystemBlueprintFunctionLibrary : public UBlu
 {
 	GENERATED_BODY()
 public:
-	UFUNCTION(BlueprintPure, Category = "Targeting System")
+	UFUNCTION(BlueprintPure, Category = "Targeting System", meta = (DefaultToSelf = Actor))
 	static UTargetingSystemComponent* GetTargetingSystemComponent(AActor* Actor);
 };

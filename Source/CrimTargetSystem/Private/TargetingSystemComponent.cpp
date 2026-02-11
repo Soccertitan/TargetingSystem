@@ -46,29 +46,48 @@ void UTargetingSystemComponent::BeginPlay()
 	}
 
 	SetupLocalPlayerController();
+	CacheIsNetSimulated();
+}
+
+void UTargetingSystemComponent::PreNetReceive()
+{
+	Super::PreNetReceive();
+	
+	CacheIsNetSimulated();
+}
+
+void UTargetingSystemComponent::OnRegister()
+{
+	Super::OnRegister();
+	CacheIsNetSimulated();
+}
+
+bool UTargetingSystemComponent::HasAuthority() const
+{
+	return !bCachedIsNetSimulated;
 }
 
 void UTargetingSystemComponent::GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME_CONDITION_NOTIFY(UTargetingSystemComponent, TargetedPoint, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(ThisClass, TargetedPoint, COND_None, REPNOTIFY_OnChanged);
+	DOREPLIFETIME_CONDITION_NOTIFY(ThisClass, bCameraLocked, COND_None, REPNOTIFY_OnChanged);
 }
 
-void UTargetingSystemComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-	FActorComponentTickFunction* ThisTickFunction)
+void UTargetingSystemComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (bCameraLocked && IsValid(TargetedPoint.Get()))
+	if (bCameraLocked && IsValid(TargetedPoint))
 	{
-		SetControlRotation(TargetedPoint.Get(), DeltaTime);
+		SetControlRotation(TargetedPoint, DeltaTime);
 	}
 }
 
 void UTargetingSystemComponent::SetTarget(UTargetPointComponent* NewTargetPoint)
 {
-	if (TargetedPoint.Get() == NewTargetPoint)
+	if (TargetedPoint == NewTargetPoint)
 	{
 		return;
 	}
@@ -79,32 +98,21 @@ void UTargetingSystemComponent::SetTarget(UTargetPointComponent* NewTargetPoint)
 		return;
 	}
 
-	if (!IsTargetable(NewTargetPoint))
+	if (!NewTargetPoint || !NewTargetPoint->GetIsTargetable())
 	{
 		return;
 	}
+	
+	TargetedPoint = NewTargetPoint;
+	OnTargetedPointSet();
 
-	if (!GetOwner()->HasAuthority())
+	if (!HasAuthority())
 	{
 		Server_SetTarget(NewTargetPoint);
 	}
-	
-	TargetedPoint = NewTargetPoint;
-	
-	CreateAndAttachTargetSelectedWidgetComponent(NewTargetPoint);
-	NewTargetPoint->GetOwner()->OnDestroyed.AddUniqueDynamic(this, &UTargetingSystemComponent::OnTargetPointOwnerDestroyed);
-	
-	GetWorld()->GetTimerManager().SetTimer(
-		CheckTargetPointTimerHandle,
-		this,
-		&UTargetingSystemComponent::CheckTargetPoint,
-		CheckFrequency,
-		true
-	);
-
-	if (GetOwner()->HasAuthority())
+	else
 	{
-		OnRep_TargetedPoint();	
+		OnRep_TargetedPoint();
 	}
 }
 
@@ -143,7 +151,7 @@ UTargetPointComponent* UTargetingSystemComponent::FindNearestTarget(const TArray
 UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft) const
 {
 	TArray<UTargetPointComponent*> TargetablePoints = GetTargetablePoints(Filters);
-	UTargetPointComponent* NewTarget = TargetedPoint.Get();
+	UTargetPointComponent* NewTarget = TargetedPoint;
 
 	if (IsValid(NewTarget))
 	{
@@ -252,32 +260,27 @@ UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(const TArray<UT
 
 void UTargetingSystemComponent::ClearTarget()
 {
-	if (!GetOwner()->HasAuthority())
+	if (TargetedPoint == nullptr)
 	{
-		Server_ClearTarget();
+		return;
 	}
 	
 	TargetedPoint = nullptr;
-	if (IsValid(TargetWidgetComponent))
+	OnClearTarget();
+
+	if (!HasAuthority())
 	{
-		TargetWidgetComponent->DestroyComponent();
+		Server_ClearTarget();
 	}
-	SetCameraLock(false);
-	OnRep_TargetedPoint();
+	else
+	{
+		OnRep_TargetedPoint();
+	}
 }
 
-UTargetPointComponent* UTargetingSystemComponent::GetTarget() const
+UTargetPointComponent* UTargetingSystemComponent::GetTargetedPoint() const
 {
-	return TargetedPoint.Get();
-}
-
-bool UTargetingSystemComponent::IsTargetable(UTargetPointComponent* InTargetPoint)
-{
-	if (IsValid(InTargetPoint))
-	{
-		return InTargetPoint->GetIsTargetable();
-	}
-	return false;
+	return TargetedPoint;
 }
 
 void UTargetingSystemComponent::ToggleCameraLock()
@@ -294,46 +297,20 @@ void UTargetingSystemComponent::ToggleCameraLock()
 
 void UTargetingSystemComponent::SetCameraLock(bool bLock)
 {
-	if (bLock == bCameraLocked)
+	if (bCameraLocked == bLock)
 	{
 		return;
 	}
 
-	if (!GetOwner()->HasAuthority())
+	bCameraLocked = bLock;
+	OnCameraLockSet();
+	if (!HasAuthority())
 	{
-		Server_SetCameraLock(bLock);
-	}
-	
-	// Recast PlayerController in case it wasn't already setup on Begin Play (local split screen)
-	SetupLocalPlayerController();
-
-	if (bLock)
-	{
-		// Won't lock the camera if we are targeting a Point on ourselves.
-		if (IsValid(TargetedPoint.Get()) &&
-			TargetedPoint.Get()->GetOwner() != GetOwner())
-		{
-			SetOrientRotationToMovement(!bForceOrientRotationToLockOnTarget);
-
-			if ((bAdjustPitchBasedOnDistanceToTarget || bIgnoreLookInput) &&
-			IsValid(OwnerPlayerController))
-			{
-				OwnerPlayerController->SetIgnoreLookInput(true);
-			}
-			bCameraLocked = bLock;
-			OnCameraLockToggled.Broadcast(bCameraLocked);
-		}
+		Server_SetCameraLock(bCameraLocked);
 	}
 	else
 	{
-		SetOrientRotationToMovement(true);
-		
-		if (IsValid(OwnerPlayerController))
-		{
-			OwnerPlayerController->ResetIgnoreLookInput();
-		}
-		bCameraLocked = bLock;
-		OnCameraLockToggled.Broadcast(bCameraLocked);
+		OnRep_CameraLocked();
 	}
 }
 
@@ -391,6 +368,71 @@ float UTargetingSystemComponent::GetDistanceToPoint(const UTargetPointComponent*
 	return 0.f;
 }
 
+void UTargetingSystemComponent::OnTargetedPointSet()
+{
+	OnTargetedPointUpdatedDelegate.Broadcast(TargetedPoint);
+
+	CreateAndAttachTargetSelectedWidgetComponent(TargetedPoint);
+	TargetedPoint->GetOwner()->OnDestroyed.AddUniqueDynamic(this, &UTargetingSystemComponent::OnTargetPointOwnerDestroyed);
+	
+	GetWorld()->GetTimerManager().SetTimer(
+		CheckTargetPointTimerHandle,
+		this,
+		&UTargetingSystemComponent::CheckTargetPoint,
+		CheckFrequency,
+		true
+	);
+}
+
+void UTargetingSystemComponent::OnClearTarget()
+{
+	OnTargetedPointUpdatedDelegate.Broadcast(nullptr);
+
+	if (IsValid(TargetWidgetComponent))
+	{
+		TargetWidgetComponent->DestroyComponent();
+	}
+	SetCameraLock(false);
+}
+
+void UTargetingSystemComponent::OnCameraLockSet()
+{
+	OnCameraLockSetDelegate.Broadcast(bCameraLocked);
+	
+	// Recast PlayerController in case it wasn't already setup on Begin Play (local split screen)
+	SetupLocalPlayerController();
+
+	if (bCameraLocked)
+	{
+		// Won't lock the camera if we are targeting a Point on ourselves.
+		if (IsValid(TargetedPoint) &&
+			TargetedPoint->GetOwner() != GetOwner())
+		{
+			SetOrientRotationToMovement(!bForceOrientRotationToLockOnTarget);
+
+			if ((bAdjustPitchBasedOnDistanceToTarget || bIgnoreLookInput) &&
+			IsValid(OwnerPlayerController))
+			{
+				OwnerPlayerController->SetIgnoreLookInput(true);
+			}
+		}
+	}
+	else
+	{
+		SetOrientRotationToMovement(true);
+		
+		if (IsValid(OwnerPlayerController))
+		{
+			OwnerPlayerController->SetIgnoreLookInput(false);
+		}
+	}
+}
+
+void UTargetingSystemComponent::CacheIsNetSimulated()
+{
+	bCachedIsNetSimulated = IsNetSimulating();
+}
+
 void UTargetingSystemComponent::CheckTargetPoint()
 {
 	if (ShouldBreakTargeting() && !bIsBreakingLineOfSight)
@@ -407,12 +449,12 @@ void UTargetingSystemComponent::CheckTargetPoint()
 
 bool UTargetingSystemComponent::ShouldBreakTargeting() const
 {
-	if (!TargetedPoint.Get())
+	if (!TargetedPoint)
 	{
 		return true;
 	}
 
-	if (!TargetedPoint.Get()->GetIsTargetable())
+	if (!TargetedPoint->GetIsTargetable())
 	{
 		return true;
 	}
@@ -424,7 +466,7 @@ bool UTargetingSystemComponent::ShouldBreakTargeting() const
 	bool BlockedHit = GetWorld()->LineTraceSingleByChannel(
 		HitResult,
 		OwnerPawn->GetActorLocation(),
-		TargetedPoint.Get()->GetComponentLocation(),
+		TargetedPoint->GetComponentLocation(),
 		ECC_Visibility,
 		Params
 	);
@@ -434,7 +476,7 @@ bool UTargetingSystemComponent::ShouldBreakTargeting() const
 		return true;
 	}
 
-	if (GetDistanceToPoint(TargetedPoint.Get()) > MaxTargetingRange)
+	if (GetDistanceToPoint(TargetedPoint) > MaxTargetingRange)
 	{
 		return true;
 	}
@@ -555,26 +597,27 @@ void UTargetingSystemComponent::CreateAndAttachTargetSelectedWidgetComponent(UTa
 
 void UTargetingSystemComponent::SetupLocalPlayerController()
 {
-	if (!IsValid(OwnerPawn))
+	if (!OwnerPlayerController)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[%s] TargetSystemComponent: Component is meant to be added to Pawn only."), *GetName());
-		Deactivate();
-		return;
+		OwnerPlayerController = Cast<APlayerController>(OwnerPawn->GetController());
 	}
-
-	OwnerPlayerController = Cast<APlayerController>(OwnerPawn->GetController());
 }
 
 void UTargetingSystemComponent::OnRep_TargetedPoint()
 {
-	if (TargetedPoint.Get())
+	if (TargetedPoint)
 	{
-		OnTargetPointSelected.Broadcast(TargetedPoint.Get());
+		OnTargetedPointSet();
 	}
 	else
 	{
-		OnTargetPointCleared.Broadcast(nullptr);
+		OnClearTarget();
 	}
+}
+
+void UTargetingSystemComponent::OnRep_CameraLocked()
+{
+	OnCameraLockSet();
 }
 
 void UTargetingSystemComponent::OnTargetPointOwnerDestroyed(AActor* DestroyedActor)

@@ -11,8 +11,8 @@ class UWidgetComponent;
 class UCameraComponent;
 class UTargetPointComponent;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FTargetingSystemCompTargetPointDelegate, UTargetPointComponent*, NewTarget);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FTargetingSystemCompGenericBoolDelegate, bool, bEnabled);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FTargetingSystemCompTargetPointSignature, UTargetPointComponent*, NewTarget);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FTargetingSystemCompGenericBoolSignature, bool, bEnabled);
 
 /**
  * Finds a TargetPointComponent within range to target and attach a widget to it. Can also control the camera and
@@ -25,19 +25,19 @@ class TARGETINGSYSTEM_API UTargetingSystemComponent : public UActorComponent
 
 public:
 	UTargetingSystemComponent();
-	
-	/**
-	 * Updates the TargetPoint with the passed in value. If Pawn doesn't have authority calls the server version.
-	 * @param NewTargetPoint Updates the currently selected TargetPoint with the NewTargetPoint.
-	 */
-	UFUNCTION(BlueprintCallable, Category="Targeting System")
-	void SetTarget(UTargetPointComponent* NewTargetPoint);
 
 	/**
-	 * Finds the target that is closest to the of this pawn.
+	 * Finds all the TargetablePoints within range.
+	 * @param Filters The filter to use to find targets. If null, will return all TargetPoints.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Targeting System", meta = (AutoCreateRefTerm="Filters"))
+	TArray<UTargetPointComponent*> GetTargetablePoints(const TArray<UTargetPointFilterBase*>& Filters) const;
+	
+	/**
+	 * Finds the target that is closest to the OwnerPawn.
 	 * @param Filters TargetPoints to filter out.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Targeting System")
+	UFUNCTION(BlueprintCallable, Category = "Targeting System", meta = (AutoCreateRefTerm="Filters"))
 	UTargetPointComponent* FindNearestTarget(const TArray<UTargetPointFilterBase*>& Filters) const;
 	
 	/** Searches for the next targetable point right of the current target point. If there is no current target,
@@ -45,8 +45,15 @@ public:
 	 * @param Filters TargetPoints to filter out.
 	 * @param bSearchLeft If true, will search left of target. False, right of target.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Targeting System")
+	UFUNCTION(BlueprintCallable, Category = "Targeting System", meta = (AutoCreateRefTerm="Filters"))
 	UTargetPointComponent* FindNextTarget(const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft = false) const;
+	
+	/**
+	 * Updates the TargetPoint with the passed in value. If Pawn doesn't have authority calls the server version.
+	 * @param NewTargetPoint Updates the currently selected TargetPoint with the NewTargetPoint.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Targeting System")
+	void SetTarget(UTargetPointComponent* NewTargetPoint);
 	
 	/** Clears the currently selected target and unlocks the camera. */
 	UFUNCTION(BlueprintCallable, Category = "Targeting System")
@@ -54,11 +61,7 @@ public:
 	
 	/** Returns the reference to currently targeted TargetPoint. */
 	UFUNCTION(BlueprintPure, Category = "Targeting System")
-	UTargetPointComponent* GetTarget() const;
-
-	/** Returns true if the TargetPoint is targetable */
-	UFUNCTION(BlueprintPure, Category = "Targeting System")
-	bool IsTargetable(UTargetPointComponent* InTargetPoint);
+	UTargetPointComponent* GetTargetedPoint() const;
 	
 	/** Toggles between locking and unlocking the camera and rotation. */
 	UFUNCTION(BlueprintCallable, Category = "Targeting System")
@@ -75,30 +78,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Targeting System")
 	bool IsCameraLocked() const;
 	
+	/** Returns the created TargetWidgetComponent that is created on the targeted actor. */
+	UFUNCTION(BlueprintPure, Category = "Targeting System")
+	UWidgetComponent* GetTargetWidgetComponent() const { return TargetWidgetComponent; }
+	
 	/**
-	 * Called when a new target is selected. Guaranteed to be a valid TargetPoint.
+	 * Called when the target changes or is set to nullptr.
 	 */
-	UPROPERTY(BlueprintAssignable)
-	FTargetingSystemCompTargetPointDelegate OnTargetPointSelected;
-
-	/**
-	 *	Called when the TargetedPoint is out of reach (based on MinimumDistanceToEnable) or behind an Object.
-	 */
-	UPROPERTY(BlueprintAssignable)
-	FTargetingSystemCompTargetPointDelegate OnTargetPointCleared;
+	UPROPERTY(BlueprintAssignable, DisplayName = "OnTargetedPointUpdated")
+	FTargetingSystemCompTargetPointSignature OnTargetedPointUpdatedDelegate;
 
 	/**
 	 * Called when the target is locked onto or removed. Returns true if the camera is locked.
 	 */
-	UPROPERTY(BlueprintAssignable)
-	FTargetingSystemCompGenericBoolDelegate OnCameraLockToggled;
-	
-	/**
-	 * Finds all the TargetablePoints within range.
-	 * @param Filters The filter to use to find targets. If null, will return all TargetPoints.
-	 */
-	UFUNCTION(BlueprintPure, Category = "Targeting System")
-	TArray<UTargetPointComponent*> GetTargetablePoints(const TArray<UTargetPointFilterBase*>& Filters) const;
+	UPROPERTY(BlueprintAssignable, DisplayName = "OnCameraLockSet")
+	FTargetingSystemCompGenericBoolSignature OnCameraLockSetDelegate;
 	
 	/** Gets the distance between OwnerPawn and InTargetPoint */
 	float GetDistanceToPoint(const UTargetPointComponent* InTargetPoint) const;
@@ -106,15 +100,18 @@ public:
 	//----------------------------------------------------------------------------------------------------------------
 	// Component Overrides.
 	virtual void BeginPlay() override;
+	virtual void PreNetReceive() override;
+	virtual void OnRegister() override;
 	virtual void GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	//----------------------------------------------------------------------------------------------------------------
 
-protected:
+	bool HasAuthority() const;
 	
+protected:
 	/** The maximum distance from a TargetPoint that allows targeting. */
 	UPROPERTY(EditDefaultsOnly, Category = "Targeting System")
-	float MaxTargetingRange = 2000.0f;;
+	float MaxTargetingRange = 2000.0f;
 
 	/** Frequency to check if the target is in line of sight, within range, and is generally targetable. */
 	UPROPERTY(EditDefaultsOnly, Category = "Targeting System")
@@ -164,8 +161,17 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Targeting System|Pitch Offset")
 	float PitchMax = -20.0f;
+	
+	virtual void OnTargetedPointSet();
+	virtual void OnClearTarget();
+	virtual void OnCameraLockSet();
 
-private:	
+private:
+	/** Cached value of whether our owner is a simulated Actor. */
+	UPROPERTY()
+	bool bCachedIsNetSimulated = false;
+	void CacheIsNetSimulated();
+
 	/**
 	 * Functionality to clear the target if line of sight is broken during target selection
 	 */
@@ -211,12 +217,16 @@ private:
 	TObjectPtr<UCameraComponent> CameraComponent;
 	UPROPERTY()
 	TObjectPtr<UWidgetComponent> TargetWidgetComponent;
+	
 	UPROPERTY(ReplicatedUsing = OnRep_TargetedPoint)
-	TWeakObjectPtr<UTargetPointComponent> TargetedPoint;
+	TObjectPtr<UTargetPointComponent> TargetedPoint;
 	UFUNCTION()
 	void OnRep_TargetedPoint();
-	UPROPERTY()
+	
+	UPROPERTY(ReplicatedUsing = OnRep_CameraLocked)
 	bool bCameraLocked = false;
+	UFUNCTION()
+	void OnRep_CameraLocked();
 
 	UFUNCTION()
 	void OnTargetPointOwnerDestroyed(AActor* DestroyedActor);

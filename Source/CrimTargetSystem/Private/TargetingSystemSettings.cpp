@@ -10,7 +10,7 @@
 UTargetingSystemSettings::UTargetingSystemSettings()
 {
 	TargetWidgetClass  = TSoftClassPtr<UUserWidget>(FSoftClassPath(
-		"/TargetingSystem/WBP_TargetIndicatorDefault.WBP_TargetIndicatorDefault"));
+		"/TargetingSystem/WBP_TargetIndicatorDefault.WBP_TargetIndicatorDefault_C"));
 }
 
 FName UTargetingSystemSettings::GetCategoryName() const

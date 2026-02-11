@@ -25,10 +25,10 @@ public:
 	UTargetPointComponent();
 
 	UFUNCTION(BlueprintPure, Category = "Targeting System|Target Point")
-	FGameplayTag GetTargetPointTag () const {return TargetPointTag;}
+	FGameplayTag GetTargetPointTag() const {return TargetPointTag;}
 
 	UFUNCTION(BlueprintPure, Category = "Targeting System|Target Point")
-	bool GetIsTargetable () const {return bTargetable;}
+	bool GetIsTargetable() const {return bTargetable;}
 
 private:
 	UPROPERTY(EditDefaultsOnly)
