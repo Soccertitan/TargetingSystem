@@ -148,7 +148,7 @@ UTargetPointComponent* UTargetingSystemComponent::FindNearestTarget(const TArray
 UTargetPointComponent* UTargetingSystemComponent::FindNextTarget(UTargetPointComponent* OriginPoint, const TArray<UTargetPointFilterBase*>& Filters, bool bSearchLeft) const
 {
 	TArray<UTargetPointComponent*> TargetablePoints = GetTargetablePoints(Filters);
-	UTargetPointComponent* NewTarget = OriginPoint;
+	UTargetPointComponent* NewTarget = OriginPoint ? OriginPoint : static_cast<UTargetPointComponent*>(TargetedPoint);
 
 	if (IsValid(NewTarget))
 	{
