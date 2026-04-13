@@ -276,6 +276,11 @@ void UTargetingSystemComponent::ClearTarget()
 	}
 }
 
+AActor* UTargetingSystemComponent::GetTargetedActor() const
+{
+	return TargetedPoint ? TargetedPoint->GetOwner() : nullptr;
+}
+
 UTargetPointComponent* UTargetingSystemComponent::GetTargetedPoint() const
 {
 	return TargetedPoint;

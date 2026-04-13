@@ -60,6 +60,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Targeting System")
 	void ClearTarget();
 	
+	/** Returns the currently targeted actor from the TargetedPoint*/
+	UFUNCTION(BlueprintPure, Category = "Targeting System")
+	AActor* GetTargetedActor() const;
+	
 	/** Returns the reference to currently targeted TargetPoint. */
 	UFUNCTION(BlueprintPure, Category = "Targeting System")
 	UTargetPointComponent* GetTargetedPoint() const;
